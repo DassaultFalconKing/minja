@@ -1799,14 +1799,33 @@ private:
         }
     }
 
-    /** integer, float, bool, string */
+    /** integer, float, bool, string. Adjacent string literals concatenate (`"a" "b"` -> `ab`). */
     std::shared_ptr<Value> parseConstant() {
       auto start = it;
       consumeSpaces();
       if (it == end) return nullptr;
       if (*it == '"' || *it == '\'') {
         auto str = parseString();
-        if (str) return std::make_shared<Value>(*str);
+        if (str) {
+          // Python/Jinja implicit concatenation. Only further string literals join;
+          // whitespace between them is skipped, escapes stay decoded by parseString,
+          // and a comma or number stops the loop so call args and numeric tokens stay intact.
+          while (it != end) {
+            auto checkpoint = it;
+            consumeSpaces();
+            if (it == end || (*it != '"' && *it != '\'')) {
+              it = checkpoint;
+              break;
+            }
+            auto next = parseString();
+            if (!next) {
+              it = checkpoint;
+              break;
+            }
+            *str += *next;
+          }
+          return std::make_shared<Value>(*str);
+        }
       }
       static std::regex prim_tok(R"(true\b|True\b|false\b|False\b|None\b)");
       auto token = consumeToken(prim_tok);

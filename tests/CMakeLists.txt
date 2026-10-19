@@ -6,6 +6,12 @@
 #
 # SPDX-License-Identifier: MIT
 
+add_executable(test-f004-adjacent-strings f004_adjacent_strings.cpp)
+target_link_libraries(test-f004-adjacent-strings PRIVATE minja)
+add_test(NAME test-f004-adjacent-strings COMMAND test-f004-adjacent-strings
+    ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/gemma4-26-heretic-chat_template.jinja
+    ${CMAKE_SOURCE_DIR}/tests_files/Qwen-Qwen3-Coder-30B-A3B-Instruct.jinja)
+
 add_executable(test-syntax test-syntax.cpp)
 target_compile_features(test-syntax PUBLIC cxx_std_17)
 if (CMAKE_SYSTEM_NAME STREQUAL "Windows" AND CMAKE_SYSTEM_PROCESSOR STREQUAL "arm64")
