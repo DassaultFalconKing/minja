@@ -4,6 +4,26 @@
   Published: 2026-07-09
   Context: Fixed tool-calling loops, turn closures, and thinking content-ordering.
 #}
+{%- macro format_type_argument(type_value) -%}
+    {%- if type_value is none -%}
+        <|"|>OBJECT<|"|>
+    {%- elif type_value is string -%}
+        <|"|>{{ type_value | upper }}<|"|>
+    {%- elif type_value is sequence and type_value is not string -%}
+        [
+        {%- for item in type_value -%}
+            {%- if item is string -%}
+                <|"|>{{ item | upper }}<|"|>
+            {%- else -%}
+                {{- format_argument(item) -}}
+            {%- endif -%}
+            {%- if not loop.last %},{% endif -%}
+        {%- endfor -%}
+        ]
+    {%- else -%}
+        {{- format_argument(type_value) -}}
+    {%- endif -%}
+{%- endmacro -%}
 {%- macro format_parameters(properties, required, filter_keys=false) -%}
     {%- set standard_keys = ['description', 'type', 'properties', 'required', 'nullable'] -%}
     {%- set ns = namespace(found_first=false) -%}
@@ -13,16 +33,20 @@
             {%- if ns.found_first %},{% endif -%}
             {%- set ns.found_first = true -%}
             {{ key }}:{
+            {%- set vtype = value['type'] if value is mapping and 'type' in value and value['type'] else none -%}
+            {%- set is_string_type = (vtype is string and vtype | upper == 'STRING') or (vtype is sequence and vtype is not string and ('string' in vtype or 'STRING' in vtype)) -%}
+            {%- set is_array_type = (vtype is string and vtype | upper == 'ARRAY') or (vtype is sequence and vtype is not string and ('array' in vtype or 'ARRAY' in vtype)) -%}
+            {%- set is_object_type = (vtype is string and vtype | upper == 'OBJECT') or (vtype is sequence and vtype is not string and ('object' in vtype or 'OBJECT' in vtype)) -%}
             {%- if value['description'] -%}
                 description:<|"|>{{ value['description'] }}<|"|>
                 {%- set add_comma = true -%}
             {%- endif -%}
-            {%- if value['type'] | upper == 'STRING' -%}
+            {%- if is_string_type -%}
                 {%- if value['enum'] -%}
                     {%- if add_comma %},{%- else -%} {%- set add_comma = true -%} {% endif -%}
                     enum:{{ format_argument(value['enum']) }}
                 {%- endif -%}
-            {%- elif value['type'] | upper == 'ARRAY' -%}
+            {%- elif is_array_type -%}
                 {%- if value['items'] is mapping and value['items'] -%}
                     {%- if add_comma %},{%- else -%} {%- set add_comma = true -%} {% endif -%}
                     items:{
@@ -62,7 +86,7 @@
                 {%- if add_comma %},{%- else -%} {%- set add_comma = true -%} {% endif -%}
                 nullable:true
             {%- endif -%}
-            {%- if value['type'] | upper == 'OBJECT' -%}
+            {%- if is_object_type -%}
                 {%- if value['properties'] is defined and value['properties'] is mapping -%}
                     {%- if add_comma %},{%- else -%} {%- set add_comma = true -%} {% endif -%}
                     properties:{
@@ -85,7 +109,7 @@
                 {%- endif -%}
             {%- endif -%}
             {%- if add_comma %},{%- else -%} {%- set add_comma = true -%} {% endif -%}
-            type:<|"|>{{ value['type'] | upper }}<|"|>}
+            type:{{ format_type_argument(vtype) }}}
         {%- endif -%}
     {%- endfor -%}
 {%- endmacro -%}
@@ -106,7 +130,7 @@
             ],
         {%- endif -%}
         {%- if params['type'] -%}
-            type:<|"|>{{- params['type'] | upper -}}<|"|>}
+            type:{{ format_type_argument(params['type']) }}}
         {%- endif -%}
     {%- endif -%}
     {%- if 'response' in tool_data['function'] -%}
@@ -115,8 +139,10 @@
         {%- if response_declaration['description'] -%}
             description:<|"|>{{- response_declaration['description'] -}}<|"|>,
         {%- endif -%}
-        {%- if response_declaration['type'] | upper == 'OBJECT' -%}
-            type:<|"|>{{- response_declaration['type'] | upper -}}<|"|>}
+        {%- set response_type = response_declaration['type'] if response_declaration is mapping else none -%}
+        {%- set response_is_object = (response_type is string and response_type | upper == 'OBJECT') or (response_type is sequence and response_type is not string and ('object' in response_type or 'OBJECT' in response_type)) -%}
+        {%- if response_is_object -%}
+            type:{{ format_type_argument(response_type) }}
         {%- endif -%}
     {%- endif -%}
     }
